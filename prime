@@ -1,27 +1,29 @@
 #!/bin/bash
 if [ ! $_render ]; then
-	echo 'Set $_render to all, display, vulkan'
-	exit 1
+        echo 'Set $_render to all, display, vulkan'
+        exit 1
 fi
 # export firstRun=1
 # if [[ ! ${firstRun} ]]; then
-# 	pkexec bash -c 'tee /sys/bus/pci/rescan <<< 1'
+#       pkexec bash -c 'tee /sys/bus/pci/rescan <<< 1'
 # fi
 if [ ! ${_dGPUApp} ]; then
-	export _dGPUApp=0
+        export _dGPUApp=0
 fi
 export _dGPUApp=`expr ${_dGPUApp} + 1`
-sudo modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset -a
+sudo modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset -a --ignore-install
 if [ $_render = all ]; then
-	__NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
+        __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
 elif [ $_render = display ]; then
-	__NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia "$@"
+        __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia "$@"
 elif [ $_render = vulkan ]; then
-	VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
+        VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
 fi
 
 sleep 5s
 export _dGPUApp=`expr ${_dGPUApp} - 1`
 if [[ ${_dGPUApp} = 0 ]]; then
-	sudo modprobe nvidia_uvm nvidia_drm nvidia_modeset -r
+#       sudo modprobe nvidia_uvm nvidia_drm nvidia_modeset -r
+        sudo modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r
+        pkexec bash -c "echo 'auto' > '/sys/bus/pci/devices/0000:03:00.0/power/control'"
 fi

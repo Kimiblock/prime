@@ -8,9 +8,7 @@ A bash script that can power down `Nvidia Optimus` cards automatically, inspired
 lib32-nvidia-utils
 nvidia
 nvidia-utils
-bbswitch (bbswitch-dkms)
-acpi_call
-optimus-manager (optimus-manager-qt, for GUI)
+nvidia-xrun-pm
 nvidia-prime (Optional)
 nvidia-settings (Optional)
 ```
@@ -21,30 +19,33 @@ Download the executable 'prime' and copy it into `/sbin`
 
 ## Configuration
 
-### Optimus Manager
+### ~~Optimus Manager~~
 
-Edit `/etc/optimus-manager/optimus-manager.conf`
+~~Edit `/etc/optimus-manager/optimus-manager.conf`~~
 
-```optimus-manager.conf
-[nvidia]
-DPI=0
-PAT=yes
-allow_external_gpus=yes
-dynamic_power_management=fine
-ignore_abi=no
-modeset=yes
-options=
+### nvidia-xrun
 
-[optimus]
-auto_logout=no
-pci_power_control=no
-pci_remove=yes
-pci_reset=function_level
-startup_auto_battery_mode=integrated
-startup_auto_extpower_mode=integrated
-startup_mode=integrated
-switching=bbswitch
+#### Service
+
+```bash
+sudo systemctl enable nvidia-xrun-pm.service
 ```
+
+
+
+#### Conf file
+
+Add `/etc/modprobe.d/blacklist-nvidia.conf` to blacklist Nvidia kernel modules
+
+```blacklist-nvidia.conf
+blacklist nvidia
+blacklist nvidia-drm
+blacklist nvidia-modeset
+blacklist nvidia_uvm
+install nvidia /bin/false
+```
+
+<mark> If you want to modprobe the kernel module, please add `--ignore-install` </mark>
 
 ### Environment (APUs)
 
@@ -69,6 +70,22 @@ _render=[all, display, vulkan] prime [command]
 | all              | Render your application and process Vulkan commands on your dGPU |
 | display          | Render you application on dGPU (Similar to prime-run)        |
 | vulkan           | Process vulkan commands on dGPU ( Works on `dxvk` games like `GTAV` on Proton ) |
+
+# Advanced
+
+## Change the BUS ID
+
+Follow [this guide](https://github.com/Witko/nvidia-xrun#setting-the-right-bus-id) to change your BUS ID for `nvidia-xrun`
+
+Edit the prime executable, replace all the `03:00.0` to your BUS ID, which can be found by 
+
+```bash
+lspci | grep -i nvidia | awk '{print $1}'
+```
+
+
+
+This will enable `prime` to apply proper power control to your card
 
 # How does `prime` work?
 
