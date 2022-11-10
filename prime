@@ -1,0 +1,17 @@
+#!/bin/bash
+
+sudo modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset -a
+if [ ! $_render ]; then
+        echo 'Set $_render to all, display, vulkan'
+        exit 1
+fi
+if [ $_render = all ]; then
+        __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
+elif [ $_render = display ]; then
+        __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia "$@"
+elif [ $_render = vulkan ]; then
+        VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
+fi
+
+sleep 5s
+sudo modprobe nvidia_uvm nvidia_drm nvidia_modeset -r
