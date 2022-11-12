@@ -8,7 +8,7 @@ A bash script that can power down `Nvidia Optimus` cards automatically, inspired
 lib32-nvidia-utils
 nvidia
 nvidia-utils
-nvidia-xrun-pm
+cronie
 nvidia-prime (Optional)
 nvidia-settings (Optional)
 ```
@@ -19,21 +19,7 @@ Download the executable 'prime' and copy it into `/sbin`
 
 ## Configuration
 
-### ~~Optimus Manager~~
-
-~~Edit `/etc/optimus-manager/optimus-manager.conf`~~
-
-### nvidia-xrun
-
-#### Service
-
-```bash
-sudo systemctl enable nvidia-xrun-pm.service
-```
-
-
-
-#### Conf file
+### Blacklist Module
 
 Add `/etc/modprobe.d/blacklist-nvidia.conf` to blacklist Nvidia kernel modules
 
@@ -46,6 +32,28 @@ install nvidia /bin/false
 ```
 
 <mark> If you want to modprobe the kernel module, please add `--ignore-install` </mark>
+
+### Add a `cronie` rule
+
+#### Get your BUS id
+
+```bash
+lspci | grep -i nvidia | awk '{print $1}'
+```
+
+#### Edit crontab
+
+```bash
+sudo crontab -e
+```
+
+Add this line:
+
+```bash
+@reboot sleep 5s && echo 'auto' > '/sys/bus/pci/devices/0000:03:00.0/power/control
+```
+
+Where `03:00.0` is your Bus id.
 
 ### Environment (APUs)
 
@@ -89,7 +97,9 @@ This will enable `prime` to apply proper power control to your card
 
 # How does `prime` work?
 
-`Prime` relies on `optimus-manager` to turn off dGPU when your computer boots.
+When your computer boots, Nvidia modules are blacklisted so that they won't be loaded.
+
+Then, the cron rule added before will enable kernel's default power management for your dGPU.
 
 Once you call the command `prime`, it tells the Linux kernel to rescan all PCIe devices and load Nvidia kernel modules to pass some essential syntax to offload on your dGPU.
 
