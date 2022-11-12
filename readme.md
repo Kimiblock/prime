@@ -6,10 +6,9 @@ A bash script that can power down `Nvidia Optimus` cards automatically, inspired
 
 ```pacman
 lib32-nvidia-utils
-nvidia
+nvidia (nvidia-open, though not tested)
 nvidia-utils
 cronie
-nvidia-prime (Optional)
 nvidia-settings (Optional)
 ```
 
@@ -28,20 +27,21 @@ blacklist nvidia
 blacklist nvidia-drm
 blacklist nvidia-modeset
 blacklist nvidia_uvm
+blacklist nouveau
 install nvidia /bin/false
 ```
 
-<mark> If you want to modprobe the kernel module, please add `--ignore-install` </mark>
+<mark> If you do want to manually modprobe the kernel module, add `--ignore-install` </mark>
 
 ### Add a `cronie` rule
 
-#### Get your BUS id
+#### Get your Bus id
 
 ```bash
 lspci | grep -i nvidia | awk '{print $1}'
 ```
 
-#### Edit crontab
+#### Edit `crontab`
 
 ```bash
 sudo crontab -e
@@ -50,24 +50,14 @@ sudo crontab -e
 Add this line:
 
 ```bash
-@reboot sleep 5s && echo 'auto' > '/sys/bus/pci/devices/0000:03:00.0/power/control
+@reboot bash -c "sleep 5s && echo 'auto' > '/sys/bus/pci/devices/0000:03:00.0/power/control'"
 ```
 
 Where `03:00.0` is your Bus id.
 
-### Environment (APUs)
-
-`/etc/environment`
-
-Add
-
-```environment
-VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json
-```
-
-
-
 # Start Applications on dGPU
+
+## Most Applications
 
 ```bash
 _render=[all, display, vulkan] prime [command]
@@ -75,13 +65,29 @@ _render=[all, display, vulkan] prime [command]
 
 | Syntax (_render) | Effects                                                      |
 | ---------------- | ------------------------------------------------------------ |
-| all              | Render your application and process Vulkan commands on your dGPU |
+| all              | Run Applications completely on dGPU                          |
 | display          | Render you application on dGPU (Similar to prime-run)        |
-| vulkan           | Process vulkan commands on dGPU ( Works on `dxvk` games like `GTAV` on Proton ) |
+| vulkan           | Run `vulkan` on dGPU  ( Works on `dxvk` games like `GTAV` on Proton ) |
+
+## Steam games
+
+Edit you properties, add
+
+```bash
+_render=vulkan prime %command%
+```
+
+If you are encountering weird stutters, replace to
+
+```bash
+DXVA_ASYNC=1 PROTON_NO_ESYNC=1 RADV_DEBUG=llvm ENABLE_VKBASALT=0 _render=vulkan prime %command%
+```
+
+may help.
 
 # Advanced
 
-## Change the BUS ID
+## Correct Bus ID
 
 Follow [this guide](https://github.com/Witko/nvidia-xrun#setting-the-right-bus-id) to change your BUS ID for `nvidia-xrun`
 
@@ -97,11 +103,18 @@ This will enable `prime` to apply proper power control to your card
 
 # How does `prime` work?
 
-When your computer boots, Nvidia modules are blacklisted so that they won't be loaded.
+## Boot process
 
-Then, the cron rule added before will enable kernel's default power management for your dGPU.
+When your computer boots, `nvidia` module are blacklisted so that they won't be loaded.
 
-Once you call the command `prime`, it tells the Linux kernel to rescan all PCIe devices and load Nvidia kernel modules to pass some essential syntax to offload on your dGPU.
+Then, the `crontab` rule added before will enable kernel's default power management for your dGPU.
 
-After all applications running through `prime` shutdown, it will remove the Nvidia kernel modules so that other  applications won't use your graphics card from time to time. (As I know, Firefox activates my GPU when a video is being played and Chromium activates my GPU every time when it starts)
+## Offload applications
 
+Once you call the command `prime`, it loads the `nvidia` kernel modules to offload Applications on your dGPU.
+
+## Deactivate `dGPU`
+
+After all applications running through `prime` shutdown, it will remove the `nvidia` kernel module so that other applications won't activate your graphics card from time to time. (As far as I know, Firefox activates `dGPU` every time when a video is being played.)
+
+If any applications are using `dGPU` causing `modprobe -r` to fail, `prime` will send a desktop notification and elevate its permission to kill that process.
