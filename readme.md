@@ -14,7 +14,16 @@ nvidia-settings (Optional)
 
 ## Install `prime`
 
-Download the executable 'prime' and copy it into `/sbin`
+Open your terminal:
+
+```bash
+curl -O https://raw.githubusercontent.com/Kimiblock/prime/master/prime
+sudo chown $USER:root prime
+sudo mv prime /sbin
+sudo chmod 755 /sbin/prime
+```
+
+
 
 ## Configuration
 

@@ -7,9 +7,9 @@ if [ ! ${_dGPUApp} ]; then
         export _dGPUApp=0
 fi
 export _dGPUApp=`expr ${_dGPUApp} + 1`
-pkexec modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset -a --ignore-install
+pkexec bash -c 'tee /sys/bus/pci/rescan <<< 1 && modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset -a --ignore-install'
 if [ $_render = all ]; then
-        __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_ic>
+        __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
 elif [ $_render = display ]; then
         __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia "$@"
 elif [ $_render = vulkan ]; then
@@ -19,11 +19,11 @@ fi
 sleep 5s
 export _dGPUApp=`expr ${_dGPUApp} - 1`
 if [[ ${_dGPUApp} = 0 ]]; then
-        if [[ `lsof -t /dev/nvidia*` ]]; then
-                echo 'These apps are using your nvidia GPU'
-                lsof /dev/nvidia*
-                notify-send -a Prime 'Killing apps to deactivate dGPU' "`lsof /dev/nvidia*`"
-                pkexec bash -c 'kill -9 $(lsof -t /dev/nvidia*)'
-        fi
-        pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > '/sys/bus/pci/devices/0000:03:00.0/power/control'"
+	if [[ `lsof -t /dev/nvidia*` ]]; then
+		echo 'These apps are using your nvidia GPU'
+		lsof /dev/nvidia*
+		notify-send -a Prime 'Killing apps to deactivate dGPU' "`lsof /dev/nvidia*`"
+		pkexec bash -c 'kill -9 $(lsof -t /dev/nvidia*)'
+	fi
+	pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > '/sys/bus/pci/devices/0000:03:00.0/power/control'"
 fi
