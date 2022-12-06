@@ -1,5 +1,18 @@
 #!/bin/bash
 
+_version=dev-22-12-6
+
+function installCron(){
+	echo "[Info] Installing the cron job"
+	currentPath=`pwd`
+	echo '''SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+_boot=1 prime
+''' >prime-boot
+	echo "echo version=${_version}" >>prime-boot
+	pkexec bash -c "mkdir -p /etc/cron.d && mv ${currentPath}/prime-boot /etc/cron.d"
+}
+
 function findCard(){
 	pciDevice=`lspci | grep -i nvidia | awk '{print $1}'`
 }
@@ -9,6 +22,17 @@ function sendNotify(){
 }
 
 function powerUp(){
+	if [[ ! -f /etc/cron.d/prime-boot ]]; then
+		echo "[Warn] Cron job missing"
+		installCron
+	fi
+	if [[ `cat /etc/cron.d/prime-boot` =~ ${_version} ]]; then
+		echo "[Info] Cron job up to date"
+	else
+		echo "[Warn] Cron job is outdated"
+		installCron
+	fi
+	echo "[Info] Rescanning PCI devices, loading kernel modules"
 	sendNotify "Loading NVIDIA modules" "Triggering modprobe"
 	pkexec bash -c 'tee /sys/bus/pci/rescan <<< 1 && modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset -a --ignore-install'
 }
@@ -23,12 +47,15 @@ function verifyLsof(){
 }
 
 function unloadModule(){
+	echo "[Info] Removing kernel modules"
+	echo "[Info] Enabling power control"
 	pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
 }
 
 function checkPowerDown(){
 	nvidia-smi 1>/dev/null 2>/dev/null
 	if [ $? = 9 ]; then
+		echo "[Info] NVIDIA-SMI cannot reach drivers, successfully shutted down"
 		sendNotify "Drivers shutted down" "Current power state: `cat /sys/bus/pci/devices/0000:${pciDevice}/power_state`"
 	else
 		echo "[Warn] Unable to shutdown NVIDIA drivers"
@@ -60,14 +87,19 @@ function powerDown(){
 	fi
 }
 
+if [ ! ${_dGPUApp} ]; then
+        export _dGPUApp=0
+fi
+if [[ ${_boot} = 1 ]]; then
+	findCard
+	unset _boot
+	echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control
+fi
+findCard
 if [ ! $_render ]; then
         echo 'Set $_render to all, display, vulkan'
         exit 1
 fi
-if [ ! ${_dGPUApp} ]; then
-        export _dGPUApp=0
-fi
-findCard
 export _dGPUApp=`expr ${_dGPUApp} + 1`
 powerUp
 if [ $_render = all ]; then
