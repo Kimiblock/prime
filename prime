@@ -1,4 +1,65 @@
 #!/bin/bash
+
+function findCard(){
+	pciDevice=`lspci | grep -i nvidia | awk '{print $1}'`
+}
+
+function sendNotify(){
+	notify-send -a Prime "$1" "$2"
+}
+
+function powerUp(){
+	sendNotify "Loading NVIDIA modules" "Triggering modprobe"
+	pkexec bash -c 'tee /sys/bus/pci/rescan <<< 1 && modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset -a --ignore-install'
+}
+
+function verifyLsof(){
+	lsof -h 1>/dev/null 2>/dev/null
+	if [[ $? != 0 ]]; then
+		echo "[Warn] Command lsof returned error code $?, NVIDIA drivers may not be unloaded properly"
+		sendNotify "Command lsof returned error code $?" "NVIDIA drivers may not be unloaded properly"
+		return 1
+	fi
+}
+
+function unloadModule(){
+	pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+}
+
+function checkPowerDown(){
+	nvidia-smi 1>/dev/null 2>/dev/null
+	if [ $? = 9 ]; then
+		sendNotify "Drivers shutted down" "Current power state: `cat /sys/bus/pci/devices/0000:${pciDevice}/power_state`"
+	else
+		echo "[Warn] Unable to shutdown NVIDIA drivers"
+		sleep 1s
+		echo "[Warn] Current power state: `cat /sys/bus/pci/devices/0000:${pciDevice}/power_state`"
+		sendNotify "Unable to shutdown drivers" "Current power state: `cat /sys/bus/pci/devices/0000:${pciDevice}/power_state`"
+		return 114514
+	fi
+}
+
+function powerDown(){
+	verifyLsof
+	if [ $? = 1 ]; then
+		unloadModule
+		checkPowerDown
+	fi
+	sendNotify "Powering down NVIDIA GPU" "Shutting down drivers"
+	if [[ `lsof -t /dev/nvidia*` ]]; then
+		echo 'These apps are using your nvidia GPU'
+		lsof /dev/nvidia*
+		sleep 1s
+		sendNotify "These apps will be killed" `lsof -F c /dev/nvidia* | awk '/^c/ { print substr($0,2)}'`
+		pkexec bash -c "kill -9 $(lsof -t /dev/nvidia*) && modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+		nvidia-smi 1>/dev/null 2>/dev/null
+		checkPowerDown
+	else
+		pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+		checkPowerDown
+	fi
+}
+
 if [ ! $_render ]; then
         echo 'Set $_render to all, display, vulkan'
         exit 1
@@ -6,8 +67,9 @@ fi
 if [ ! ${_dGPUApp} ]; then
         export _dGPUApp=0
 fi
+findCard
 export _dGPUApp=`expr ${_dGPUApp} + 1`
-pkexec bash -c 'tee /sys/bus/pci/rescan <<< 1 && modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset -a --ignore-install'
+powerUp
 if [ $_render = all ]; then
         __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
 elif [ $_render = display ]; then
@@ -15,15 +77,6 @@ elif [ $_render = display ]; then
 elif [ $_render = vulkan ]; then
         VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
 fi
-
 sleep 5s
 export _dGPUApp=`expr ${_dGPUApp} - 1`
-if [[ ${_dGPUApp} = 0 ]]; then
-	if [[ `lsof -t /dev/nvidia*` ]]; then
-		echo 'These apps are using your nvidia GPU'
-		lsof /dev/nvidia*
-		notify-send -a Prime 'Killing apps to deactivate dGPU' "`lsof /dev/nvidia*`"
-		pkexec bash -c 'kill -9 $(lsof -t /dev/nvidia*)'
-	fi
-	pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > '/sys/bus/pci/devices/0000:03:00.0/power/control'"
-fi
+powerDown

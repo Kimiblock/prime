@@ -83,7 +83,11 @@ _render=[all, display, vulkan] prime [command]
 Edit you properties, add
 
 ```bash
-_render=vulkan prime %command%
+_render=vulkan prime %command% #for dxvk games
+```
+
+```bash
+_render=all prime %command% #for other games
 ```
 
 If you are encountering weird stutters, replace to
@@ -98,9 +102,9 @@ may help.
 
 ## Correct Bus ID
 
-Follow [this guide](https://github.com/Witko/nvidia-xrun#setting-the-right-bus-id) to change your BUS ID for `nvidia-xrun`
+~~Follow [this guide](https://github.com/Witko/nvidia-xrun#setting-the-right-bus-id) to change your BUS ID for `nvidia-xrun`~~
 
-Edit the prime executable, replace all the `03:00.0` to your BUS ID, which can be found by 
+~~Edit the prime executable, replace all the `03:00.0` to your BUS ID, which can be found by~~ 
 
 ```bash
 lspci | grep -i nvidia | awk '{print $1}'
@@ -108,7 +112,9 @@ lspci | grep -i nvidia | awk '{print $1}'
 
 
 
-This will enable `prime` to apply proper power control to your card
+~~This will enable `prime` to apply proper power control to your card~~
+
+`prime` will automatically detect your BUS ID now so that you no longer need to modify it manually.
 
 # How does `prime` work?
 
