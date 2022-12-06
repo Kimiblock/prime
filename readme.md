@@ -42,27 +42,29 @@ install nvidia /bin/false
 
 <mark> If you do want to manually modprobe the kernel module, add `--ignore-install` </mark>
 
-### Add a `cronie` rule
+### ~~Add a `cronie` rule~~
 
-#### Get your Bus id
+#### ~~Get your Bus id~~
 
 ```bash
 lspci | grep -i nvidia | awk '{print $1}'
 ```
 
-#### Edit `crontab`
+#### ~~Edit `crontab`~~
 
 ```bash
 sudo crontab -e
 ```
 
-Add this line:
+~~Add this line:~~
 
 ```bash
 @reboot bash -c "sleep 5s && echo 'auto' > '/sys/bus/pci/devices/0000:03:00.0/power/control'"
 ```
 
-Where `03:00.0` is your Bus id.
+~~Where `03:00.0` is your Bus id.~~
+
+`prime` will automatically install a cron job
 
 # Start Applications on dGPU
 
