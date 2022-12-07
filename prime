@@ -1,6 +1,6 @@
 #!/bin/bash
 
-_version=dev-22-12-6
+_version=dev-22-12-7
 
 function installCron(){
 	echo "[Info] Installing the cron job"
@@ -13,6 +13,32 @@ _boot=1 prime
 	pkexec bash -c "mkdir -p /etc/cron.d && mv ${currentPath}/prime-boot /etc/cron.d"
 }
 
+function createBlacklist(){
+	rm blacklist-nvidia.conf 2>/dev/null
+	for list in 'blacklist nvidia' "blacklist nvidia-drm" "blacklist nvidia_uvm" "blacklist nvidia-modeset" "blacklist nouveau" "install nvidia /bin/false"; do
+		echo ${list} >>blacklist-nvidia.conf
+	done
+}
+
+function installBlacklist(){
+	echo "[Info] Installing blacklist rule"
+	currentPath=`pwd`
+	createBlacklist
+	pkexec bash -c "mv ${currentPath}/blacklist-nvidia.conf /etc/modprobe.d"
+}
+
+function primeModprobe(){
+	modprobe $@
+	statusCode=$?
+	if [ ${statusCode} = 0 ]; then
+		echo "[Info] modprobe success"
+	else
+		echo "[Critical] modprobe returned error ${statusCode}, make sure NVIDIA drivers are installed. If you updated your kernel recently, reboot then try again."
+		sendNotify "Failed to load kernel modules" "Check if NVIDIA drivers are installed and reboot"
+		exit ${statusCode}
+	fi
+}
+
 function findCard(){
 	pciDevice=`lspci | grep -i nvidia | awk '{print $1}'`
 }
@@ -21,7 +47,22 @@ function sendNotify(){
 	notify-send -a Prime "$1" "$2"
 }
 
-function powerUp(){
+function checkBlacklist(){
+	createBlacklist
+	if [[ -f /etc/modprobe.d/blacklist-nvidia.conf ]]; then
+		echo "[Info] Blacklist installed"
+	else
+		installBlacklist
+	fi
+	if [[ `cat /etc/modprobe.d/blacklist-nvidia.conf` = `cat blacklist-nvidia.conf` ]]; then
+		echo "[Info] Blacklist up to date"
+	else
+		installBlacklist
+	fi
+	rm blacklist-nvidia.conf
+}
+
+function checkCron(){
 	if [[ ! -f /etc/cron.d/prime-boot ]]; then
 		echo "[Warn] Cron job missing"
 		installCron
@@ -32,6 +73,11 @@ function powerUp(){
 		echo "[Warn] Cron job is outdated"
 		installCron
 	fi
+}
+
+function powerUp(){
+	checkBlacklist
+	checkCron
 	echo "[Info] Rescanning PCI devices, loading kernel modules"
 	sendNotify "Loading NVIDIA modules" "Triggering modprobe"
 	pkexec bash -c 'tee /sys/bus/pci/rescan <<< 1 && modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset -a --ignore-install'
@@ -86,6 +132,23 @@ function powerDown(){
 		checkPowerDown
 	fi
 }
+
+function firstUse(){
+	currentPath=`pwd`
+	echo '''SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+_boot=1 prime
+''' >prime-boot
+	echo "echo version=${_version}" >>prime-boot
+	createBlacklist
+	pkexec bash -c "mkdir -p /etc/cron.d && mv ${currentPath}/prime-boot /etc/cron.d && mv ${currentPath}/blacklist-nvidia.conf /etc/modprobe.d && systemctl enable --now cronie"
+# 	sendNotify "Prime configured" "Restart your PC"
+}
+
+if [[ $1 = '--first-use' ]]; then
+	firstUse
+	exit $?
+fi
 
 if [ ! ${_dGPUApp} ]; then
         export _dGPUApp=0
