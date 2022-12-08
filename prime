@@ -1,6 +1,6 @@
 #!/bin/bash
 
-_version=dev-22-12-7
+_version=dev-22-12-8
 
 function installCron(){
 	echo "[Info] Installing the cron job"
@@ -124,8 +124,8 @@ function powerDown(){
 		lsof /dev/nvidia*
 		sleep 1s
 		sendNotify "These apps will be killed" `lsof -F c /dev/nvidia* | awk '/^c/ { print substr($0,2)}'`
+		sendNotify "Notice" "If prime failed to shutdown, you can run another prime instance to recover it"
 		pkexec bash -c "kill -9 $(lsof -t /dev/nvidia*) && modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
-		nvidia-smi 1>/dev/null 2>/dev/null
 		checkPowerDown
 	else
 		pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
@@ -142,11 +142,16 @@ _boot=1 prime
 	echo "echo version=${_version}" >>prime-boot
 	createBlacklist
 	pkexec bash -c "mkdir -p /etc/cron.d && mv ${currentPath}/prime-boot /etc/cron.d && mv ${currentPath}/blacklist-nvidia.conf /etc/modprobe.d && systemctl enable --now cronie"
-# 	sendNotify "Prime configured" "Restart your PC"
+ 	sendNotify "Prime configured" "Restart your PC"
 }
 
 if [[ $1 = '--first-use' ]]; then
 	firstUse
+	exit $?
+fi
+
+if [[ $1 = '--force-down' ]]; then
+	powerDown
 	exit $?
 fi
 
