@@ -112,6 +112,25 @@ function checkPowerDown(){
 	fi
 }
 
+function createScreen(){
+	screenName=prime
+	screen -dmS ${screenName}
+	screenId=`screen -ls | grep .${screenName} | awk '{print $1}' | cut -d "." -f 1`
+}
+
+function screenRun(){
+	createScreen
+	screen -x ${screenId} -p 0 -X stuff "$@"
+	screen -x ${screenId} -p 0 -X stuff '\r'
+	sleep 5s
+	terminateScreen
+}
+
+function terminateScreen(){
+	screen -x ${screenId} -p 0 -X stuff "exit"
+	screen -x ${screenId} -p 0 -X stuff '\r'
+}
+
 function powerDown(){
 	verifyLsof
 	if [ $? = 1 ]; then
@@ -125,7 +144,7 @@ function powerDown(){
 		sleep 1s
 		sendNotify "These apps will be killed" `lsof -F c /dev/nvidia* | awk '/^c/ { print substr($0,2)}'`
 		sendNotify "Notice" "If prime failed to shutdown, you can run another prime instance to recover it"
-		pkexec bash -c "kill -9 $(lsof -t /dev/nvidia*) && modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+ 		pkexec bash -c "lsof -t /dev/nvidia* | xargs kill && modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
 		checkPowerDown
 	else
 		pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
@@ -145,6 +164,7 @@ _boot=1 prime
  	sendNotify "Prime configured" "Restart your PC"
 }
 
+findCard
 if [[ $1 = '--first-use' ]]; then
 	firstUse
 	exit $?
@@ -163,7 +183,6 @@ if [[ ${_boot} = 1 ]]; then
 	unset _boot
 	echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control
 fi
-findCard
 if [ ! $_render ]; then
         echo 'Set $_render to all, display, vulkan'
         exit 1
@@ -177,6 +196,6 @@ elif [ $_render = display ]; then
 elif [ $_render = vulkan ]; then
         VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
 fi
-sleep 5s
+sleep 2s
 export _dGPUApp=`expr ${_dGPUApp} - 1`
 powerDown
