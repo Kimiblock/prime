@@ -13,6 +13,7 @@ nvidia-utils #For nvidia-smi
 cronie
 polkit #For permission elevation, use with agents (example: polkit-kde-agent)
 nvidia-settings #(Optional)
+screen
 ```
 
 ## Install `prime`

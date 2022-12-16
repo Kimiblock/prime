@@ -1,6 +1,6 @@
 #!/bin/bash
 
-_version=dev-22-12-8
+_version=dev-22-12-15
 
 function installCron(){
 	echo "[Info] Installing the cron job"
@@ -67,12 +67,12 @@ function checkCron(){
 		echo "[Warn] Cron job missing"
 		installCron
 	fi
-	if [[ `cat /etc/cron.d/prime-boot` =~ ${_version} ]]; then
-		echo "[Info] Cron job up to date"
-	else
-		echo "[Warn] Cron job is outdated"
-		installCron
-	fi
+# 	if [[ `cat /etc/cron.d/prime-boot` =~ ${_version} ]]; then
+# 		echo "[Info] Cron job up to date"
+# 	else
+# 		echo "[Warn] Cron job is outdated"
+# 		installCron
+# 	fi
 }
 
 function powerUp(){
@@ -80,7 +80,7 @@ function powerUp(){
 	checkCron
 	echo "[Info] Rescanning PCI devices, loading kernel modules"
 	sendNotify "Loading NVIDIA modules" "Triggering modprobe"
-	pkexec bash -c 'tee /sys/bus/pci/rescan <<< 1 && modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset -a --ignore-install'
+	pkexec bash -c 'tee /sys/bus/pci/rescan <<< 1 && modprobe nvidia nvidia_uvm nvidia_drm nvidia_modeset --ignore-install'
 }
 
 function verifyLsof(){
@@ -95,7 +95,8 @@ function verifyLsof(){
 function unloadModule(){
 	echo "[Info] Removing kernel modules"
 	echo "[Info] Enabling power control"
-	pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+	screenQuene "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+	screenRun
 }
 
 function checkPowerDown(){
@@ -113,22 +114,43 @@ function checkPowerDown(){
 }
 
 function createScreen(){
-	screenName=prime
-	screen -dmS ${screenName}
-	screenId=`screen -ls | grep .${screenName} | awk '{print $1}' | cut -d "." -f 1`
+	screen -S prime -X quit
+	screen -dmS prime
+	screenId=`screen -ls | grep .prime | awk '{print $1}' | cut -d "." -f 1`
+}
+
+function screenQuene(){
+	if [ ! ${screenId} ]; then
+		echo '[Info] Creating screen process'
+		createScreen
+		screen -x ${screenId} -p 0 -X stuff "pkexec bash -c 'mkdir -p /var/cache/prime"
+		screenQuene "echo 0 >/var/cache/prime/screenFinished"
+	fi
+	screen -x ${screenId} -p 0 -X stuff ' && '
+	screen -x ${screenId} -p 0 -X stuff "$@"
 }
 
 function screenRun(){
-	createScreen
-	screen -x ${screenId} -p 0 -X stuff "$@"
+	screenQuene 'echo confirm >/var/cache/prime/screenFinished'
+	screenQuene 'sleep 2s'
+# 	screenQuene 'echo 0 >/var/cache/prime/screenFinished'
+	screenQuene 'rm -r /var/cache/prime'
+	screen -x ${screenId} -p 0 -X stuff "'"
 	screen -x ${screenId} -p 0 -X stuff '\r'
-	sleep 5s
+	_finished=0
+	while [ ${_finished} = 0 ]; do
+		if [[ `sleep 1s && cat /var/cache/prime/screenFinished 2>/dev/null` = 'confirm' ]]; then
+			_finished=1
+			echo '[Info] Screen process finished'
+		fi
+	done
 	terminateScreen
 }
 
 function terminateScreen(){
 	screen -x ${screenId} -p 0 -X stuff "exit"
 	screen -x ${screenId} -p 0 -X stuff '\r'
+	unset ${screenId}
 }
 
 function powerDown(){
@@ -144,10 +166,14 @@ function powerDown(){
 		sleep 1s
 		sendNotify "These apps will be killed" `lsof -F c /dev/nvidia* | awk '/^c/ { print substr($0,2)}'`
 		sendNotify "Notice" "If prime failed to shutdown, you can run another prime instance to recover it"
- 		pkexec bash -c "lsof -t /dev/nvidia* | xargs kill && modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+#  		pkexec bash -c "lsof -t /dev/nvidia* | xargs kill && sleep 4s && modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+		screenQuene "lsof -t /dev/nvidia* | xargs kill && sleep 4s && modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+		screenRun
 		checkPowerDown
 	else
-		pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+# 		pkexec bash -c "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && sleep 2s && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+		screenQuene "modprobe nvidia_uvm nvidia_drm nvidia_modeset nvidia -r && sleep 1s && echo 'auto' > /sys/bus/pci/devices/0000:${pciDevice}/power/control"
+		screenRun
 		checkPowerDown
 	fi
 }
@@ -164,6 +190,7 @@ _boot=1 prime
  	sendNotify "Prime configured" "Restart your PC"
 }
 
+unset screenId
 findCard
 if [[ $1 = '--first-use' ]]; then
 	firstUse
