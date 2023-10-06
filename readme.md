@@ -1,3 +1,5 @@
+**No longer updated**. See https://github.com/Kimiblock/moeOS.config for switchable graphics.
+
 A utility aimed to achieve dual graphics switching with very low performance impact and automatically turns off NVIDIA GPUs to save power.
 
 Install `prime` and required packages, run `prime --first-use` in your terminal, then enjoy it~
